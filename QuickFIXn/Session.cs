@@ -210,8 +210,17 @@ namespace QuickFix
         /// Sets a maximum number of messages to request in a resend request.
         /// </summary>
         public int MaxMessagesInResendRequest { get; set; }
+
+        /// <summary>
+        /// This is the FIX field value, e.g. "6" for FIX44
+        /// </summary>
         public ApplVerID targetDefaultApplVerID { get; set; }
+
+        /// <summary>
+        /// This is the FIX field value, e.g. "6" for FIX44
+        /// </summary>
         public string SenderDefaultApplVerID { get; set; }
+
         public SessionID SessionID { get; set; }
         public IApplication Application { get; set; }
         public DataDictionaryProvider DataDictionaryProvider { get; set; }
@@ -545,6 +554,7 @@ namespace QuickFix
 
             MessageBuilder msgBuilder = new MessageBuilder(
                     msgStr,
+                    SenderDefaultApplVerID,
                     this.ValidateLengthAndChecksum,
                     this.SessionDataDictionary,
                     this.ApplicationDataDictionary,
@@ -556,7 +566,7 @@ namespace QuickFix
         /// <summary>
         /// Process a message from the counterparty.
         /// </summary>
-        /// <param name="message"></param>
+        /// <param name="msgBuilder"></param>
         internal void Next(MessageBuilder msgBuilder)
         {
             if (!IsSessionTime)
@@ -582,7 +592,7 @@ namespace QuickFix
                 string beginString = msgBuilder.BeginString;
 
                 if (!beginString.Equals(this.SessionID.BeginString))
-                    throw new UnsupportedVersion();
+                    throw new UnsupportedVersion(beginString);
 
 
                 if (MsgType.LOGON.Equals(msgType))
@@ -649,7 +659,7 @@ namespace QuickFix
                     this.Log.OnEvent(e.InnerException.Message);
                 GenerateReject(msgBuilder, e.sessionRejectReason, e.Field);
             }
-            catch (UnsupportedVersion)
+            catch (UnsupportedVersion uvx)
             {
                 if (MsgType.LOGOUT.Equals(msgBuilder.MsgType.Obj))
                 {
@@ -657,7 +667,8 @@ namespace QuickFix
                 }
                 else
                 {
-                    GenerateLogout("Incorrect BeginString");
+                    this.Log.OnEvent(uvx.ToString());
+                    GenerateLogout(uvx.Message);
                     state_.IncrNextTargetMsgSeqNum();
                 }
             }
@@ -1267,7 +1278,7 @@ namespace QuickFix
         /// <summary>
         /// FIXME don't do so much operator new here
         /// </summary>
-        /// <param name="heartBtInt"></param>
+        /// <param name="otherLogon"></param>
         /// <returns></returns>
         protected bool GenerateLogon(Message otherLogon)
         {
@@ -1481,6 +1492,7 @@ namespace QuickFix
         /// FIXME don't do so much operator new here
         /// </summary>
         /// <param name="m"></param>
+        /// <param name="msgSeqNum"></param>
         protected void InitializeHeader(Message m, int msgSeqNum)
         {
             state_.LastSentTimeDT = DateTime.UtcNow;
